@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '../generated/prisma';
-import { db } from '../utils/firebase'; // firebase admin init
-
+import { db } from '../utils/firebase';
 
 const prisma = new PrismaClient();
 
@@ -25,14 +24,22 @@ export async function handleIOTData(req: Request, res: Response) {
     const hasChanged =
       atsStatusNew !== atsStatusOld || currentSourceNew !== currentSourceOld;
 
+    // 🔥 Use the timestamp from ESP32 instead of creating new Date()
+    const esp32Timestamp = payload.timestamp; // "2023-12-07T14:30:45.123Z"
+    
+    // Remove the 'Z' since it's actually Jakarta time, not UTC
+    const timestampWithoutZ = esp32Timestamp.replace('Z', '');
+    
+    // Convert to Date object for Supabase/Prisma - now it's treated as local time
+    const timestamp = new Date(timestampWithoutZ);
+
+    // Untuk Firebase, gunakan timestamp tanpa 'Z' untuk konsistensi
+    const firebaseTimestamp = timestampWithoutZ;
+
     // Jika berubah, simpan ke Supabase
     if (hasChanged) {
       console.log('⚡ Detected change, saving to Supabase');
 
-      const timestamp = new Date(
-        new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T')
-      );
-      
       await prisma.powerLog.create({
         data: {
           timestamp,
@@ -48,10 +55,9 @@ export async function handleIOTData(req: Request, res: Response) {
       });
     }
 
-    // Perbarui Firebase realtime data (hanya satu entri)
-    const nowJakarta = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(' ', 'T');
+    // Perbarui Firebase realtime data (pakai string yang sama)
     await firebaseRef.set({
-      timestamp: nowJakarta,
+      timestamp: firebaseTimestamp,
       ats_status: atsStatusNew,
       current_source: currentSourceNew,
       grid_voltage: payload.grid_info.voltage,
