@@ -24,8 +24,12 @@ export async function handleIOTData(req: Request, res: Response) {
     const hasChanged =
       atsStatusNew !== atsStatusOld || currentSourceNew !== currentSourceOld;
 
+    // console.log('🔄 Received data:', payload);
+    // console.log('🕒 Last data:', lastData);
+    // console.log('✅ Has changed:', hasChanged);
+
     // 🔥 Use the timestamp from ESP32 instead of creating new Date()
-    const esp32Timestamp = payload.timestamp; // "2023-12-07T14:30:45.123Z"
+    const esp32Timestamp = payload.timestamp; // example "2023-12-07T14:30:45.123Z"
     
     // Remove the 'Z' since it's actually Jakarta time, not UTC
     const timestampWithoutZ = esp32Timestamp.replace('Z', '');
@@ -40,19 +44,25 @@ export async function handleIOTData(req: Request, res: Response) {
     if (hasChanged) {
       console.log('⚡ Detected change, saving to Supabase');
 
-      await prisma.powerLog.create({
-        data: {
-          timestamp,
-          ats_status: atsStatusNew,
-          current_source: currentSourceNew,
-          grid_voltage: payload.grid_info.voltage,
-          grid_frequency: payload.grid_info.frequency,
-          grid_power: payload.grid_info.power,
-          solar_current: payload.solar_info.current,
-          solar_voltage: payload.solar_info.voltage,
-          solar_power: payload.solar_info.power,
-        },
-      });
+      try {
+        const result = await prisma.powerLog.create({
+          data: {
+            timestamp,
+            ats_status: atsStatusNew,
+            current_source: currentSourceNew,
+            grid_voltage: payload.grid_info.voltage,
+            grid_frequency: payload.grid_info.frequency,
+            grid_power: payload.grid_info.power,
+            solar_current: payload.solar_info.current,
+            solar_voltage: payload.solar_info.voltage,
+            solar_power: payload.solar_info.power,
+          },
+        });
+        console.log('✅ Successfully saved to Supabase. ID:', result);
+      } catch (supabaseError) {
+        console.error('❌ Supabase save failed:', supabaseError);
+        // Don't throw here if you want Firebase to still work
+      }
     }
 
     // Perbarui Firebase realtime data (pakai string yang sama)
